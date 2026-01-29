@@ -4,7 +4,7 @@ import { supabase } from "./supabase";
 // ================= CONFIG =================
 const DEFAULT_PEOPLE = [
   "Augusto","Cris Lage","Gabriela","Giovanna","Hanna","Helo","Janja",
-  "Joao","Juan","Juliete","Mari","Silas","Karina"
+  "Joao","Juan","Juliete","Karina","Mari","Silas","Vini"
 ].sort((a,b)=>a.localeCompare(b));
 
 const EMOJIS = ["❤️","🤥","🤮","🐍","👜","💔","🪴","🎯","🍌","💣"];
