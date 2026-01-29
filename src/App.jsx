@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { supabase } from "./supabase"; // Certifique-se de ter src/supabase.js configurado
+import { supabase } from "./supabase";
 
 // ================= CONFIG =================
 const DEFAULT_PEOPLE = [
@@ -15,84 +15,108 @@ export default function App() {
   const [emojis] = useState(DEFAULT_EMOJIS);
   const [currentUser, setCurrentUser] = useState("");
   const [password, setPassword] = useState("");
-  const [step, setStep] = useState("home"); // home | login | register | vote | results
-  const [selected, setSelected] = useState({});
+  const [users, setUsers] = useState({});
+  const [votedToday, setVotedToday] = useState({});
   const [votes, setVotes] = useState({});
-  const [totalVoters, setTotalVoters] = useState(0);
+  const [selected, setSelected] = useState({});
+  const [step, setStep] = useState("home"); // home | login | register | vote | results
 
   const today = new Date();
   const todayKey = today.toISOString().slice(0,10);
   const todayFormatted = today.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
 
-  // ================= FUNÇÕES =================
-
-  // Carrega votos globais
-  const loadVotes = async () => {
-    const { data } = await supabase
-      .from("votes")
-      .select("*")
-      .eq("day", todayKey);
-
-    // inicializa todos os nomes e emojis
-    const newVotes = {};
-    people.forEach(person => {
-      newVotes[person] = {};
-      emojis.forEach(e => newVotes[person][e] = 0);
-    });
-
-    // soma os votos do banco
-    data.forEach(v => {
-      const target = v.target.trim();
-      if (!newVotes[target]) newVotes[target] = {};
-      if (!newVotes[target][v.emoji]) newVotes[target][v.emoji] = 0;
-      newVotes[target][v.emoji] += 1;
-    });
-
-    setVotes(newVotes);
-
-    const votersSet = new Set(data.map(v => v.voter.trim()));
-    setTotalVoters(votersSet.size);
-  };
-
+  // ------------------ Load votes and users ------------------
   useEffect(() => {
-    loadVotes();
+    const fetchData = async () => {
+      const { data: voteData, error: voteErr } = await supabase
+        .from("votes")
+        .select("*")
+        .eq("day", todayKey);
+      if (voteErr) console.error(voteErr);
+
+      // Inicializa votes com mapeamento correto
+      const newVotes = {};
+      voteData?.forEach(v => {
+        let target = v.target.trim();
+        // Normaliza para ignorar acento e maiúsculas
+        const normalizedTarget = target.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const matched = people.find(p => 
+          p.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === normalizedTarget
+        );
+        if (!matched) return;
+        target = matched;
+
+        if (!newVotes[target]) newVotes[target] = {};
+        if (!newVotes[target][v.emoji]) newVotes[target][v.emoji] = 0;
+        newVotes[target][v.emoji] += 1;
+      });
+      setVotes(newVotes);
+
+      // Carrega usuários e votos do localStorage para senha e controle de quem votou
+      setUsers(JSON.parse(localStorage.getItem("queridometro_users") || "{}"));
+      setVotedToday(JSON.parse(localStorage.getItem("queridometro_voted") || "{}"));
+    };
+    fetchData();
   }, []);
 
-  // Seleção única de emoji
-  const handleVote = (person, emoji) => {
-    setSelected(prev => ({ ...prev, [person]: emoji }));
+  // ------------------ Helpers ------------------
+  const saveUsers = (newUsers) => {
+    setUsers(newUsers);
+    localStorage.setItem("queridometro_users", JSON.stringify(newUsers));
   };
 
-  // Finalizar votação
+  const saveVoted = (newVoted) => {
+    setVotedToday(newVoted);
+    localStorage.setItem("queridometro_voted", JSON.stringify(newVoted));
+  };
+
+  const handleVote = (person, emoji) => {
+    // Seleção única
+    setSelected(prev => ({ ...prev, [person]: { [emoji]: true } }));
+  };
+
   const finishVoting = async () => {
-    if (Object.keys(selected).length !== people.length - 1) {
-      alert("Você deve votar em todos os participantes!");
-      return;
+    // Confirma que todos foram votados
+    const notVoted = people.filter(p => p !== currentUser && !selected[p]);
+    if (notVoted.length > 0) {
+      return alert("Você precisa votar em todos!");
     }
 
-    const voteData = people.filter(p => p !== currentUser).map(person => ({
-      voter: currentUser.trim(),
-      target: person.trim(),
-      emoji: selected[person],
-      day: todayKey
-    }));
+    // Grava votos no Supabase
+    for (const person of people.filter(p => p !== currentUser)) {
+      const emoji = Object.keys(selected[person])[0];
+      await supabase.from("votes").insert({
+        voter: currentUser,
+        target: person,
+        emoji: emoji,
+        day: todayKey
+      });
+    }
 
-    const { error } = await supabase.from("votes").insert(voteData, { onConflict: ["voter","target","day"] });
-    if (error) return alert("Erro ao registrar votos: " + error.message);
-
-    alert("Voto registrado! Resultados liberados após 5 pessoas votarem.");
+    // Marca que votou hoje
+    const newVoted = { ...votedToday, [currentUser]: true };
+    saveVoted(newVoted);
     setStep("results");
-    loadVotes();
   };
 
-  // ================= RENDER =================
+  const totalVotes = (person) => {
+    return emojis.reduce((sum, e) => sum + (votes[person]?.[e] || 0), 0);
+  };
 
+  // ------------------ RANKING ------------------
+  const ranking = [...people]
+    .map(p => ({ name: p, total: totalVotes(p) }))
+    .sort((a, b) => b.total - a.total);
+
+  const totalVotersToday = Object.keys(votedToday).length;
+
+  // ------------------ RENDER ------------------
   if (step === "home") {
     return (
       <div style={styles.container}>
         <h1>Queridômetro dxs Gaymers</h1>
         <p style={{opacity:0.7}}>📅 {todayFormatted}</p>
-        <p>Responde 1x por dia. Reset automático diário.</p>
+        <p>Responde 1x por dia. Reset diário automático.</p>
         <button style={styles.mainBtn} onClick={() => setStep("login")}>Responder</button>
         <button style={styles.mainBtn} onClick={() => setStep("results")}>Ver Resultados</button>
       </div>
@@ -101,17 +125,6 @@ export default function App() {
 
   // LOGIN
   if (step === "login") {
-    const [users, setUsers] = useState({});
-    useEffect(() => {
-      const loadUsers = async () => {
-        const { data } = await supabase.from("users").select("*");
-        const map = {};
-        data.forEach(u => map[u.name.trim()] = u.password);
-        setUsers(map);
-      };
-      loadUsers();
-    }, []);
-
     return (
       <div style={styles.container}>
         <h1>Identificação</h1>
@@ -121,11 +134,10 @@ export default function App() {
         </select>
         <input type="password" placeholder="Senha" value={password} onChange={e => setPassword(e.target.value)} />
         <div>
-          <button disabled={!currentUser} onClick={async () => {
+          <button disabled={!currentUser} onClick={() => {
             if (!users[currentUser]) setStep("register");
-            else if (users[currentUser] === password) {
-              const { data } = await supabase.from("votes").select("*").eq("voter", currentUser).eq("day", todayKey);
-              if (data.length > 0) alert("Você já respondeu hoje.");
+            else if (users[currentUser].password === password) {
+              if (votedToday[currentUser]) alert("Você já respondeu hoje.");
               else setStep("vote");
             } else alert("Senha incorreta");
           }}>Entrar</button>
@@ -134,24 +146,24 @@ export default function App() {
     );
   }
 
-  // REGISTRAR SENHA
+  // REGISTER
   if (step === "register") {
     return (
       <div style={styles.container}>
         <h1>Criar senha</h1>
         <p>Primeiro acesso de {currentUser}</p>
         <input type="password" placeholder="Nova senha" value={password} onChange={e => setPassword(e.target.value)} />
-        <button onClick={async () => {
+        <button onClick={() => {
           if (!password) return alert("Defina uma senha");
-          const { error } = await supabase.from("users").insert({ name: currentUser, password });
-          if (error) return alert("Erro ao criar usuário: " + error.message);
+          const newUsers = { ...users, [currentUser]: { password } };
+          saveUsers(newUsers);
           setStep("vote");
         }}>Salvar e Entrar</button>
       </div>
     );
   }
 
-  // VOTAÇÃO
+  // VOTING
   if (step === "vote") {
     return (
       <div style={styles.container}>
@@ -166,9 +178,9 @@ export default function App() {
                   key={e}
                   style={{
                     ...styles.emojiBtn,
-                    background: selected[person] === e ? "#22c55e" : "#222",
-                    transform: selected[person] === e ? "scale(1.2)" : "scale(1)",
-                    boxShadow: selected[person] === e ? "0 0 12px #22c55e" : "none"
+                    background: selected[person]?.[e] ? "#22c55e" : "#222",
+                    transform: selected[person]?.[e] ? "scale(1.2)" : "scale(1)",
+                    boxShadow: selected[person]?.[e] ? "0 0 12px #22c55e" : "none"
                   }}
                   onClick={() => handleVote(person, e)}
                 >
@@ -178,43 +190,45 @@ export default function App() {
             </div>
           </div>
         ))}
-        <button style={styles.mainBtn} onClick={finishVoting}>Finalizar Voto</button>
+        <button onClick={finishVoting}>Finalizar Voto</button>
       </div>
     );
   }
 
-  // RESULTADOS
+  // RESULTS
   if (step === "results") {
-    const showResults = totalVoters >= 5;
-
     return (
       <div style={styles.container}>
         <h1>Resultados do Queridômetro</h1>
         <p style={{opacity:0.7}}>📅 {todayFormatted}</p>
-
-        {!showResults && <p>Os resultados serão liberados após 5 pessoas votarem.</p>}
-
-        {showResults && people.map(person => (
-          <div key={person} style={{
-            ...styles.card,
-            background: currentUser === person ? "#3333aa" : "#111"
-          }}>
-            <h3>{person}</h3>
-            <div>
-              {emojis.map(e => <span key={e} style={{ marginRight: 12 }}>{e} {votes[person]?.[e] || 0}</span>)}
-            </div>
-          </div>
-        ))}
-
-        <button style={styles.mainBtn} onClick={() => setStep("home")}>Voltar</button>
+        {totalVotersToday < 5 ? (
+          <p>Aguardando pelo menos 5 votos para liberar resultados...</p>
+        ) : (
+          <>
+            <h2>Detalhado</h2>
+            {people.map(person => (
+              <div
+                key={person}
+                style={{
+                  ...styles.card,
+                  background: person === currentUser ? "#334155" : "#111"
+                }}
+              >
+                <h3>{person}</h3>
+                <div>
+                  {emojis.map(e => <span key={e} style={{ marginRight: 12 }}>{e} {votes[person]?.[e] || 0}</span>)}
+                </div>
+              </div>
+            ))}
+          </>
+        )}
+        <button onClick={() => setStep("home")}>Voltar</button>
       </div>
     );
   }
-
-  return null;
 }
 
-// ================= STYLES =================
+// ------------------ STYLES ------------------
 const styles = {
   container: { maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif", textAlign: "center" },
   card: { background: "#111", color: "#fff", padding: 15, marginBottom: 12, borderRadius: 12 },
