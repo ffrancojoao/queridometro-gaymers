@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { supabase } from "./supabase"; // Certifique-se que src/supabase.js está configurado
+import { supabase } from "./supabase"; // Certifique-se de ter src/supabase.js configurado
 
 // ================= CONFIG =================
 const DEFAULT_PEOPLE = [
@@ -19,6 +19,7 @@ export default function App() {
   const [selected, setSelected] = useState({});
   const [votes, setVotes] = useState({});
   const [totalVoters, setTotalVoters] = useState(0);
+
   const today = new Date();
   const todayKey = today.toISOString().slice(0,10);
   const todayFormatted = today.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
@@ -32,13 +33,21 @@ export default function App() {
       .select("*")
       .eq("day", todayKey);
 
+    // inicializa todos os nomes e emojis
     const newVotes = {};
+    people.forEach(person => {
+      newVotes[person] = {};
+      emojis.forEach(e => newVotes[person][e] = 0);
+    });
+
+    // soma os votos do banco
     data.forEach(v => {
-      const target = v.target.trim(); // remove apenas espaços
+      const target = v.target.trim();
       if (!newVotes[target]) newVotes[target] = {};
       if (!newVotes[target][v.emoji]) newVotes[target][v.emoji] = 0;
       newVotes[target][v.emoji] += 1;
     });
+
     setVotes(newVotes);
 
     const votersSet = new Set(data.map(v => v.voter.trim()));
