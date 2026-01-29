@@ -34,11 +34,9 @@ export default function App() {
         .eq("day", todayKey);
       if (voteErr) console.error(voteErr);
 
-      // Inicializa votes com mapeamento correto
       const newVotes = {};
       voteData?.forEach(v => {
         let target = v.target.trim();
-        // Normaliza para ignorar acento e maiúsculas
         const normalizedTarget = target.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const matched = people.find(p => 
           p.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") === normalizedTarget
@@ -52,7 +50,7 @@ export default function App() {
       });
       setVotes(newVotes);
 
-      // Carrega usuários e votos do localStorage para senha e controle de quem votou
+      // Carrega usuários e votos do localStorage
       setUsers(JSON.parse(localStorage.getItem("queridometro_users") || "{}"));
       setVotedToday(JSON.parse(localStorage.getItem("queridometro_voted") || "{}"));
     };
@@ -76,7 +74,6 @@ export default function App() {
   };
 
   const finishVoting = async () => {
-    // Confirma que todos foram votados
     const notVoted = people.filter(p => p !== currentUser && !selected[p]);
     if (notVoted.length > 0) {
       return alert("Você precisa votar em todos!");
@@ -93,7 +90,6 @@ export default function App() {
       });
     }
 
-    // Marca que votou hoje
     const newVoted = { ...votedToday, [currentUser]: true };
     saveVoted(newVoted);
     setStep("results");
@@ -102,11 +98,6 @@ export default function App() {
   const totalVotes = (person) => {
     return emojis.reduce((sum, e) => sum + (votes[person]?.[e] || 0), 0);
   };
-
-  // ------------------ RANKING ------------------
-  const ranking = [...people]
-    .map(p => ({ name: p, total: totalVotes(p) }))
-    .sort((a, b) => b.total - a.total);
 
   const totalVotersToday = Object.keys(votedToday).length;
 
@@ -130,7 +121,9 @@ export default function App() {
         <h1>Identificação</h1>
         <select value={currentUser} onChange={e => setCurrentUser(e.target.value)}>
           <option value="">Selecione seu nome</option>
-          {people.map(p => <option key={p}>{p}</option>)}
+          {people.map(p => (
+            <option key={p} value={p}>{p}</option>
+          ))}
         </select>
         <input type="password" placeholder="Senha" value={password} onChange={e => setPassword(e.target.value)} />
         <div>
