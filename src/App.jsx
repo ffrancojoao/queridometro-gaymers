@@ -19,10 +19,11 @@ export default function App() {
   const [selected, setSelected] = useState({});
   const [votes, setVotes] = useState({});
   const [totalVoters, setTotalVoters] = useState(0);
-
   const today = new Date();
   const todayKey = today.toISOString().slice(0,10);
   const todayFormatted = today.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+
+  // ================= FUNÇÕES =================
 
   // Carrega votos globais
   const loadVotes = async () => {
@@ -33,14 +34,15 @@ export default function App() {
 
     const newVotes = {};
     data.forEach(v => {
-      if (!newVotes[v.target]) newVotes[v.target] = {};
-      if (!newVotes[v.target][v.emoji]) newVotes[v.target][v.emoji] = 0;
-      newVotes[v.target][v.emoji] += 1;
+      const target = v.target.trim(); // remove espaços extras
+      if (!newVotes[target]) newVotes[target] = {};
+      if (!newVotes[target][v.emoji]) newVotes[target][v.emoji] = 0;
+      newVotes[target][v.emoji] += 1;
     });
     setVotes(newVotes);
 
     // Contar votantes distintos
-    const votersSet = new Set(data.map(v => v.voter));
+    const votersSet = new Set(data.map(v => v.voter.trim()));
     setTotalVoters(votersSet.size);
   };
 
@@ -48,45 +50,35 @@ export default function App() {
     loadVotes();
   }, []);
 
-  // ========== FUNCOES ==========
+  // Seleção única de emoji
   const handleVote = (person, emoji) => {
     setSelected(prev => ({ ...prev, [person]: emoji }));
   };
 
+  // Finalizar votação
   const finishVoting = async () => {
-    // obrigatório votar em todos
-    if (Object.keys(selected).length !== people.length -1) {
+    if (Object.keys(selected).length !== people.length - 1) {
       alert("Você deve votar em todos os participantes!");
       return;
     }
 
-    // salva votos no Supabase
-    const { error } = await supabase.from("votes").insert(
-      people.filter(p => p !== currentUser).map(person => ({
-        voter: currentUser,
-        target: person,
-        emoji: selected[person],
-        day: todayKey
-      }))
-    );
+    const voteData = people.filter(p => p !== currentUser).map(person => ({
+      voter: currentUser,
+      target: person,
+      emoji: selected[person],
+      day: todayKey
+    }));
 
-    if (error) {
-      alert("Erro ao enviar votos: " + error.message);
-      return;
-    }
+    const { error } = await supabase.from("votes").insert(voteData);
+    if (error) return alert("Erro ao registrar votos: " + error.message);
 
     alert("Voto registrado! Resultados liberados após 5 pessoas votarem.");
     setStep("results");
     loadVotes();
   };
 
-  const getTotal = (person) => {
-    return emojis.reduce((sum, e) => sum + (votes[person]?.[e] || 0), 0);
-  };
-
-  const showResults = totalVoters >= 5;
-
   // ================= RENDER =================
+
   if (step === "home") {
     return (
       <div style={styles.container}>
@@ -99,14 +91,14 @@ export default function App() {
     );
   }
 
+  // LOGIN
   if (step === "login") {
     const [users, setUsers] = useState({});
-
     useEffect(() => {
       const loadUsers = async () => {
         const { data } = await supabase.from("users").select("*");
         const map = {};
-        data.forEach(u => map[u.name] = u.password);
+        data.forEach(u => map[u.name.trim()] = u.password);
         setUsers(map);
       };
       loadUsers();
@@ -124,7 +116,6 @@ export default function App() {
           <button disabled={!currentUser} onClick={async () => {
             if (!users[currentUser]) setStep("register");
             else if (users[currentUser] === password) {
-              // verificar se já votou hoje
               const { data } = await supabase.from("votes").select("*").eq("voter", currentUser).eq("day", todayKey);
               if (data.length > 0) alert("Você já respondeu hoje.");
               else setStep("vote");
@@ -135,6 +126,7 @@ export default function App() {
     );
   }
 
+  // REGISTRAR SENHA
   if (step === "register") {
     return (
       <div style={styles.container}>
@@ -151,6 +143,7 @@ export default function App() {
     );
   }
 
+  // VOTAÇÃO
   if (step === "vote") {
     return (
       <div style={styles.container}>
@@ -182,7 +175,10 @@ export default function App() {
     );
   }
 
+  // RESULTADOS
   if (step === "results") {
+    const showResults = totalVoters >= 5;
+
     return (
       <div style={styles.container}>
         <h1>Resultados do Queridômetro</h1>
@@ -190,19 +186,18 @@ export default function App() {
 
         {!showResults && <p>Os resultados serão liberados após 5 pessoas votarem.</p>}
 
-        {showResults && (
-          <>
-            {people.map(person => (
-              <div key={person} style={{
-                ...styles.card,
-                background: currentUser === person ? "#3333aa" : "#111"
-              }}>
-                <h3>{person}</h3>
-                <div>{emojis.map(e => <span key={e} style={{ marginRight: 12 }}>{e} {votes[person]?.[e] || 0}</span>)}</div>
-              </div>
-            ))}
-          </>
-        )}
+        {showResults && people.map(person => (
+          <div key={person} style={{
+            ...styles.card,
+            background: currentUser === person ? "#3333aa" : "#111"
+          }}>
+            <h3>{person}</h3>
+            <div>
+              {emojis.map(e => <span key={e} style={{ marginRight: 12 }}>{e} {votes[person]?.[e] || 0}</span>)}
+            </div>
+          </div>
+        ))}
+
         <button style={styles.mainBtn} onClick={() => setStep("home")}>Voltar</button>
       </div>
     );
@@ -211,6 +206,7 @@ export default function App() {
   return null;
 }
 
+// ================= STYLES =================
 const styles = {
   container: { maxWidth: 700, margin: "40px auto", fontFamily: "sans-serif", textAlign: "center" },
   card: { background: "#111", color: "#fff", padding: 15, marginBottom: 12, borderRadius: 12 },
