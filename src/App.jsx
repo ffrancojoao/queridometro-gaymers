@@ -34,14 +34,13 @@ export default function App() {
 
     const newVotes = {};
     data.forEach(v => {
-      const target = v.target.trim(); // remove espaços extras
+      const target = v.target.trim(); // remove apenas espaços
       if (!newVotes[target]) newVotes[target] = {};
       if (!newVotes[target][v.emoji]) newVotes[target][v.emoji] = 0;
       newVotes[target][v.emoji] += 1;
     });
     setVotes(newVotes);
 
-    // Contar votantes distintos
     const votersSet = new Set(data.map(v => v.voter.trim()));
     setTotalVoters(votersSet.size);
   };
@@ -63,13 +62,13 @@ export default function App() {
     }
 
     const voteData = people.filter(p => p !== currentUser).map(person => ({
-      voter: currentUser,
-      target: person,
+      voter: currentUser.trim(),
+      target: person.trim(),
       emoji: selected[person],
       day: todayKey
     }));
 
-    const { error } = await supabase.from("votes").insert(voteData);
+    const { error } = await supabase.from("votes").insert(voteData, { onConflict: ["voter","target","day"] });
     if (error) return alert("Erro ao registrar votos: " + error.message);
 
     alert("Voto registrado! Resultados liberados após 5 pessoas votarem.");
