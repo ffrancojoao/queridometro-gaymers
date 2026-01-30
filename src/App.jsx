@@ -11,7 +11,6 @@ const EMOJIS = ["❤️","🤥","🤮","🐍","👜","💔","🪴","🎯","🍌"
 const MIN_VOTERS = 5;
 // =========================================
 
-// Normaliza nomes para evitar problemas com acentos
 const normalize = (name) =>
   name.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
@@ -25,13 +24,14 @@ export default function App() {
   const [votedToday, setVotedToday] = useState({});
   const [todayFormatted, setTodayFormatted] = useState("");
 
-  // Calcula dia atual em Brasília
-  const now = new Date();
-  const brTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  // Data de hoje no fuso de Brasília
+  const brTime = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
   const todayKey = brTime.toISOString().slice(0,10);
-  setTodayFormatted(brTime.toLocaleDateString("pt-BR", { weekday:"long", day:"2-digit", month:"long", year:"numeric" }));
+  useEffect(() => {
+    setTodayFormatted(brTime.toLocaleDateString("pt-BR", { weekday:"long", day:"2-digit", month:"long", year:"numeric" }));
+  }, []);
 
-  // ----------------- Load votes do Supabase -----------------
+  // ----------------- Load Supabase -----------------
   useEffect(() => {
     fetchVotes();
     fetchUsers();
@@ -65,9 +65,7 @@ export default function App() {
   async function fetchUsers() {
     const { data } = await supabase.from("users").select("*");
     const userMap = {};
-    data?.forEach(u => {
-      userMap[u.name] = { password: u.password };
-    });
+    data?.forEach(u => userMap[u.name] = { password: u.password });
     setUsers(userMap);
   }
 
@@ -206,3 +204,4 @@ const styles = {
   emojiBtn:{ fontSize:26, padding:10, borderRadius:12, cursor:"pointer", border:"none", transition:"0.15s all" },
   mainBtn:{ fontSize:18, padding:"10px 20px", margin:10, borderRadius:10, border:"none", cursor:"pointer" }
 };
+
