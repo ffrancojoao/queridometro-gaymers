@@ -2,15 +2,17 @@ import React, { useState, useEffect } from "react";
 import { supabase } from "./supabase";
 
 // ================= CONFIG =================
-const DEFAULT_PEOPLE = [
-  "Augusto","Cris Lage","Gabriela","Giovanna","Hanna","Helo","Janja",
-  "Joao","Juan","Juliete","Karina","Mari","Silas","Vini"
+const PEOPLE = [
+  "Augusto","Cris Lage","Gabriela","Giovanna","Hanna","Helô","Janja",
+  "Joao","Juan","Juliete","Mari","Silas"
 ].sort((a,b)=>a.localeCompare(b));
 
 const EMOJIS = ["❤️","🤥","🤮","🐍","👜","💔","🪴","🎯","🍌","💣"];
+const MIN_VOTERS = 5;
+// =========================================
 
-// Normalize names: remove accents, lowercase, trim
-const normalizeName = (name) =>
+// Normaliza nomes para evitar problemas com acentos
+const normalize = (name) =>
   name.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
 export default function App() {
@@ -19,102 +21,85 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [selected, setSelected] = useState({});
   const [votes, setVotes] = useState({});
+  const [users, setUsers] = useState({});
   const [votedToday, setVotedToday] = useState({});
-  const [voteCount, setVoteCount] = useState(0);
-  const brasilNow = new Date(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }));
-  const todayKey = brasilNow.toISOString().slice(0,10);
+  const [todayFormatted, setTodayFormatted] = useState("");
 
-  const todayFormatted = brasilNow.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
-  // ------------------ Load votes from Supabase ------------------
+  // Calcula dia atual em Brasília
+  const now = new Date();
+  const brTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const todayKey = brTime.toISOString().slice(0,10);
+  setTodayFormatted(brTime.toLocaleDateString("pt-BR", { weekday:"long", day:"2-digit", month:"long", year:"numeric" }));
+
+  // ----------------- Load votes do Supabase -----------------
   useEffect(() => {
-    setTodayFormatted(new Date().toLocaleDateString("pt-BR", {
-      weekday:"long", day:"2-digit", month:"long", year:"numeric"
-    }));
     fetchVotes();
+    fetchUsers();
   }, []);
 
   async function fetchVotes() {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("votes")
       .select("*")
       .eq("day", todayKey);
-    if(error) return console.error(error);
 
-    const map = {};
-    data.forEach(v => {
-      // Normaliza o target para evitar acentos/capitalização
-      const targetNorm = normalizeName(v.target);
-      const matched = DEFAULT_PEOPLE.find(p => normalizeName(p) === targetNorm);
-      if(!matched) return;
+    const voteMap = {};
+    const votedMap = {};
 
-      if(!map[matched]) map[matched] = {};
-      if(!map[matched][v.emoji]) map[matched][v.emoji] = 0;
-      map[matched][v.emoji] += 1;
+    data?.forEach(v => {
+      const targetNorm = normalize(v.target);
+      const matched = PEOPLE.find(p => normalize(p) === targetNorm);
+      if (!matched) return;
+
+      if (!voteMap[matched]) voteMap[matched] = {};
+      if (!voteMap[matched][v.emoji]) voteMap[matched][v.emoji] = 0;
+      voteMap[matched][v.emoji] += 1;
+
+      votedMap[v.voter] = true;
     });
-    setVotes(map);
 
-    // Conta votantes únicos, normalizando nomes
-    const uniqueVoters = [...new Set(data.map(d => normalizeName(d.voter)))];
-    setVoteCount(uniqueVoters.length);
-
-    // Carrega votos do localStorage para saber quem já votou
-    setVotedToday(JSON.parse(localStorage.getItem("queridometro_voted") || "{}"));
+    setVotes(voteMap);
+    setVotedToday(votedMap);
   }
 
-  // ------------------ User functions ------------------
-  async function checkUser(name) {
-    const { data } = await supabase
-      .from("users")
-      .select("*")
-      .eq("name", name)
-      .single();
-    return data;
+  async function fetchUsers() {
+    const { data } = await supabase.from("users").select("*");
+    const userMap = {};
+    data?.forEach(u => {
+      userMap[u.name] = { password: u.password };
+    });
+    setUsers(userMap);
   }
 
   async function createUser(name, pass) {
     await supabase.from("users").insert([{ name, password: pass }]);
+    fetchUsers();
   }
 
-  async function verifyVoteToday(name) {
-    const { data } = await supabase
-      .from("votes")
-      .select("*")
-      .eq("voter", name)
-      .eq("day", todayKey);
-    return data.length > 0;
-  }
+  async function submitVotes() {
+    const targets = PEOPLE.filter(p => p !== currentUser);
+    if (targets.some(p => !selected[p])) return alert("Você precisa votar em todos!");
 
-  async function submitVote() {
-    // Confere se votou em todos menos ele mesmo
-    if(Object.keys(selected).length !== DEFAULT_PEOPLE.length -1)
-      return alert("Vote em todos!");
-
-    const confirmSend = window.confirm("Confirma envio dos votos? Não poderá alterar depois.");
-    if(!confirmSend) return;
-
-    const voteArr = [];
-    for(const [target, emoji] of Object.entries(selected)){
-      voteArr.push({ voter: currentUser, target, emoji, day: todayKey });
-    }
+    const voteArr = targets.map(p => ({
+      voter: currentUser,
+      target: p,
+      emoji: selected[p],
+      day: todayKey
+    }));
 
     await supabase.from("votes").insert(voteArr);
-
-    // Atualiza contagem e resultados
     fetchVotes();
     setStep("results");
-
-    // Marca como votado no localStorage
-    const newVoted = { ...votedToday, [currentUser]: true };
-    setVotedToday(newVoted);
-    localStorage.setItem("queridometro_voted", JSON.stringify(newVoted));
   }
 
-  // ------------------ UI ------------------
+  const totalVoters = Object.keys(votedToday).length;
+
+  // ----------------- UI -----------------
   if(step==="home") return (
     <div style={styles.container}>
       <h1>Queridômetro dxs Gaymers</h1>
       <p style={{opacity:0.7}}>📅 {todayFormatted}</p>
-      <p>Responde 1x por dia. Reset diário automático.</p>
+      <p>Responde 1x por dia. Reset automático diário (horário de Brasília).</p>
       <button style={styles.mainBtn} onClick={()=>setStep("login")}>Responder</button>
       <button style={styles.mainBtn} onClick={()=>setStep("results")}>Ver Resultados</button>
     </div>
@@ -125,16 +110,15 @@ export default function App() {
       <h1>Identificação</h1>
       <select value={currentUser} onChange={e=>setCurrentUser(e.target.value)}>
         <option value="">Selecione seu nome</option>
-        {DEFAULT_PEOPLE.map(p=><option key={p}>{p}</option>)}
+        {PEOPLE.map(p => <option key={p}>{p}</option>)}
       </select>
-      <input type="password" placeholder="Senha" value={password} onChange={e=>setPassword(e.target.value)} />
+      <input type="password" placeholder="Senha" value={password} onChange={e=>setPassword(e.target.value)}/>
       <button disabled={!currentUser || !password} onClick={async ()=>{
-        const user = await checkUser(currentUser);
+        const user = users[currentUser];
         if(!user) setStep("register");
         else if(user.password===password){
-          const voted = await verifyVoteToday(currentUser);
-          if(voted) alert("Você já votou hoje!");
-          else setStep("vote");
+          if(votedToday[currentUser]) alert("Você já votou hoje!");
+          else { setSelected({}); setStep("vote"); }
         } else alert("Senha incorreta");
       }}>Entrar</button>
     </div>
@@ -144,63 +128,69 @@ export default function App() {
     <div style={styles.container}>
       <h1>Criar senha</h1>
       <p>Primeiro acesso de <b>{currentUser}</b></p>
-      <input type="password" placeholder="Nova senha" value={password} onChange={e=>setPassword(e.target.value)} />
+      <input type="password" placeholder="Nova senha" value={password} onChange={e=>setPassword(e.target.value)}/>
       <button onClick={async ()=>{
         if(!password) return alert("Defina uma senha");
         await createUser(currentUser, password);
+        setSelected({});
         setStep("vote");
       }}>Salvar e Entrar</button>
     </div>
   );
 
-  if(step==="vote") return (
-    <div style={styles.container}>
-      <h1>Distribua seus emojis</h1>
-      <p>Votando como <b>{currentUser}</b> (anônimo)</p>
-      {DEFAULT_PEOPLE.filter(p=>p!==currentUser).map(person=>(
-        <div key={person} style={styles.card}>
-          <h3>{person}</h3>
-          <div style={styles.emojiRow}>
-            {EMOJIS.map(e=>(
-              <button
-                key={e}
-                style={{
-                  ...styles.emojiBtn,
-                  background:selected[person]===e?"#22c55e":"#222",
-                  transform:selected[person]===e?"scale(1.2)":"scale(1)",
-                  boxShadow:selected[person]===e?"0 0 12px #22c55e":"none"
-                }}
-                onClick={()=>setSelected({...selected,[person]:e})}
-              >{e}</button>
-            ))}
+  if(step==="vote") {
+    const targets = PEOPLE.filter(p => p !== currentUser);
+    return (
+      <div style={styles.container}>
+        <h1>Distribua seus emojis</h1>
+        <p>Votando como <b>{currentUser}</b> (anônimo)</p>
+        {targets.map(person => (
+          <div key={person} style={styles.card}>
+            <h3>{person}</h3>
+            <div style={styles.emojiRow}>
+              {EMOJIS.map(e => (
+                <button
+                  key={e}
+                  style={{
+                    ...styles.emojiBtn,
+                    background: selected[person]===e?"#22c55e":"#222",
+                    transform: selected[person]===e?"scale(1.2)":"scale(1)",
+                    boxShadow: selected[person]===e?"0 0 12px #22c55e":"none"
+                  }}
+                  onClick={()=>setSelected({...selected,[person]:e})}
+                >{e}</button>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
-      <button style={styles.mainBtn} onClick={submitVote}>Finalizar Voto</button>
-    </div>
-  );
+        ))}
+        <button style={styles.mainBtn} onClick={submitVotes}>Finalizar Voto</button>
+      </div>
+    );
+  }
 
-  if(step==="results"){
-    if(voteCount<5){
-      return (
-        <div style={styles.container}>
-          <h1>Resultados do Queridômetro</h1>
-          <p style={{opacity:0.7}}>📅 {todayFormatted}</p>
-          <p>Aguardando pelo menos 5 votos para liberar resultados...</p>
-          <button style={styles.mainBtn} onClick={()=>setStep("home")}>Voltar</button>
-        </div>
-      );
-    }
+  if(step==="results") {
     return (
       <div style={styles.container}>
         <h1>Resultados do Queridômetro</h1>
         <p style={{opacity:0.7}}>📅 {todayFormatted}</p>
-        {DEFAULT_PEOPLE.map(person=>(
-          <div key={person} style={{...styles.card, background: currentUser===person?"#333":"#111"}}>
-            <h3>{person}</h3>
-            <div>{EMOJIS.map(e=><span key={e} style={{marginRight:12}}>{e} {votes[person]?.[e]||0}</span>)}</div>
+        <p>👥 Pessoas que já votaram hoje: {totalVoters}</p>
+
+        {totalVoters < MIN_VOTERS && (
+          <div style={{background:"#111", padding:16, borderRadius:12, color:"#fff"}}>
+            <b>Resultados bloqueados para preservar o anonimato.</b>
+            <p>Serão liberados quando {MIN_VOTERS} pessoas votarem.</p>
+          </div>
+        )}
+
+        {totalVoters >= MIN_VOTERS && PEOPLE.map(person => (
+          <div key={person} style={{...styles.card, border: person===currentUser?"2px solid #22c55e":"none", background: person===currentUser?"#0f172a":"#111"}}>
+            <h3>{person}{person===currentUser?" (você)":""}</h3>
+            <div>
+              {EMOJIS.map(e => <span key={e} style={{marginRight:12}}>{e} {votes[person]?.[e]||0}</span>)}
+            </div>
           </div>
         ))}
+
         <button style={styles.mainBtn} onClick={()=>setStep("home")}>Voltar</button>
       </div>
     );
@@ -209,7 +199,6 @@ export default function App() {
   return null;
 }
 
-// ------------------ STYLES ------------------
 const styles = {
   container:{ maxWidth:700, margin:"40px auto", fontFamily:"sans-serif", textAlign:"center" },
   card:{ background:"#111", color:"#fff", padding:15, marginBottom:12, borderRadius:12 },
