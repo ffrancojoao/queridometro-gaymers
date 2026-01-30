@@ -21,10 +21,10 @@ export default function App() {
   const [votes, setVotes] = useState({});
   const [votedToday, setVotedToday] = useState({});
   const [voteCount, setVoteCount] = useState(0);
-  const [todayFormatted, setTodayFormatted] = useState("");
+  const brasilNow = new Date(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }));
+  const todayKey = brasilNow.toISOString().slice(0,10);
 
-  const todayKey = new Date().toISOString().slice(0,10);
-
+  const todayFormatted = brasilNow.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
   // ------------------ Load votes from Supabase ------------------
   useEffect(() => {
     setTodayFormatted(new Date().toLocaleDateString("pt-BR", {
