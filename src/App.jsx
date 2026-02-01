@@ -23,7 +23,6 @@ export default function App() {
   const [todayFormatted, setTodayFormatted] = useState("");
   const [yesterdayFormatted, setYesterdayFormatted] = useState("");
 
-  // Datas BR
   const todayBR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   const yesterdayBR = new Date(Date.now() - 86400000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 
@@ -32,6 +31,7 @@ export default function App() {
     setTodayFormatted(now.toLocaleDateString("pt-BR", { weekday:"long", day:"2-digit", month:"long", year:"numeric", timeZone:"America/Sao_Paulo" }));
     const y = new Date(Date.now() - 86400000);
     setYesterdayFormatted(y.toLocaleDateString("pt-BR", { weekday:"long", day:"2-digit", month:"long", year:"numeric", timeZone:"America/Sao_Paulo" }));
+
     fetchVotes();
     fetchYesterdayVotes();
   }, []);
@@ -121,15 +121,15 @@ export default function App() {
   function ProgressBar({ value, max }) {
     const percent = Math.min(100, Math.round((value / max) * 100));
     return (
-      <div style={{ width:"100%", background:"#222", borderRadius:12, margin:"10px 0" }}>
+      <div style={{ width:"100%", background:"#111", borderRadius:12, margin:"10px 0", overflow:"hidden" }}>
         <div style={{
           width: percent+"%",
           background:"linear-gradient(90deg,#22c55e,#16a34a)",
           padding:6,
-          borderRadius:12,
           textAlign:"center",
           fontWeight:"bold",
-          color:"#000"
+          color:"#000",
+          transition:"0.3s"
         }}>
           {percent}%
         </div>
@@ -137,11 +137,17 @@ export default function App() {
     );
   }
 
+  const TopBack = () => (
+    <div style={{textAlign:"center", marginBottom:10}}>
+      <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
+    </div>
+  );
+
   // ================= HOME =================
 
   if (step === "home") return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Queridômetro (Rançômetro) dxs Gaymers!</h1>
+      <h1 style={styles.title}>Queridômetro dxs Gaymers</h1>
       <p style={styles.date}>📅 {todayFormatted}</p>
 
       <button style={styles.mainBtn} onClick={()=>goStep("login")}>Responder</button>
@@ -154,7 +160,7 @@ export default function App() {
 
   if (step === "login") return (
     <div style={styles.container}>
-      <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
+      <TopBack/>
 
       <h2>Identificação</h2>
       <p style={styles.date}>📅 {todayFormatted}</p>
@@ -181,7 +187,9 @@ export default function App() {
         goStep("vote");
       }}>Entrar</button>
 
-      <button style={styles.linkBtn} onClick={()=>goStep("forgot")}>Esqueci minha senha</button>
+      <button style={styles.mainBtnOutline} onClick={()=>goStep("forgot")}>
+        Esqueci minha senha
+      </button>
     </div>
   );
 
@@ -189,8 +197,7 @@ export default function App() {
 
   if (step === "register") return (
     <div style={styles.container}>
-      <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
-
+      <TopBack/>
       <h2>Criar senha</h2>
       <p>Primeiro acesso de <b>{currentUser}</b></p>
 
@@ -204,11 +211,11 @@ export default function App() {
     </div>
   );
 
-  // ================= FORGOT PASSWORD =================
+  // ================= FORGOT =================
 
   if (step === "forgot") return (
     <div style={styles.container}>
-      <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
+      <TopBack/>
       <h2>Resetar Senha</h2>
       <p>Fale com o admin para resetar sua senha.</p>
     </div>
@@ -222,7 +229,7 @@ export default function App() {
 
     return (
       <div style={styles.container}>
-        <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
+        <TopBack/>
 
         <h2>Distribua seus emojis</h2>
         <p style={styles.date}>📅 {todayFormatted}</p>
@@ -240,7 +247,7 @@ export default function App() {
                   key={e}
                   style={{
                     ...styles.emojiBtn,
-                    background:selected[person]===e?"#22c55e":"#222",
+                    background:selected[person]===e?"#22c55e":"#111",
                     transform:selected[person]===e?"scale(1.15)":"scale(1)"
                   }}
                   onClick={()=>setSelected({...selected,[person]:e})}
@@ -253,7 +260,7 @@ export default function App() {
         ))}
 
         <button
-          style={{...styles.mainBtn, background: progress===total?"#22c55e":"#555", color:"#000"}}
+          style={{...styles.mainBtn, opacity:progress===total?1:0.4}}
           disabled={progress!==total}
           onClick={submitVote}
         >
@@ -263,15 +270,15 @@ export default function App() {
     );
   }
 
-  // ================= RESULTS TODAY =================
+  // ================= RESULTS =================
 
   if (step === "results") {
-    const blocked = voteCount < MIN_VOTERS_TO_SHOW;
-    const missing = MIN_VOTERS_TO_SHOW - voteCount;
+    const blocked = voteCount < MIN_VOTERS;
+    const missing = MIN_VOTERS - voteCount;
 
     return (
       <div style={styles.container}>
-        <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
+        <TopBack/>
 
         <h2>Resultados</h2>
         <p style={styles.date}>📅 {todayFormatted}</p>
@@ -280,12 +287,10 @@ export default function App() {
         {blocked && (
           <div style={styles.blockedBox}>
             <h3>🔒 Resultados bloqueados</h3>
-            <p>
-              É necessário <b>{MIN_VOTERS_TO_SHOW}</b> pessoas votarem para liberar os resultados.<br/>
-              Faltam <b>{missing}</b> pessoas.
-            </p>
-            <p style={{opacity:0.7}}>Isso é para preservar o anonimato dos participantes.</p>
-            <ProgressBar value={voteCount} max={MIN_VOTERS_TO_SHOW} />
+            <p>Precisa de <b>{MIN_VOTERS}</b> votantes.</p>
+            <p>Faltam <b>{missing}</b>.</p>
+            <p style={{opacity:0.7}}>Para preservar o anonimato.</p>
+            <ProgressBar value={voteCount} max={MIN_VOTERS} />
           </div>
         )}
 
@@ -301,39 +306,37 @@ export default function App() {
 
   // ================= HISTORY =================
 
-  if (step === "history") {
-    return (
-      <div style={styles.container}>
-        <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
+  if (step === "history") return (
+    <div style={styles.container}>
+      <TopBack/>
 
-        <h2>Resultados (anterior)</h2>
-        <p style={styles.date}>📅 {yesterdayFormatted}</p>
+      <h2>Resultados (anterior)</h2>
+      <p style={styles.date}>📅 {yesterdayFormatted}</p>
 
-        <h3>Top por Emoji</h3>
-        <div style={styles.topTable}>
-          {EMOJIS.map(e=>{
-            const ranking = Object.entries(yesterdayVotes).map(([name,obj])=>({name, count: obj?.[e]||0})).sort((a,b)=>b.count-a.count);
-            const max = ranking[0]?.count || 0;
-            const winners = ranking.filter(r=>r.count===max && max>0).map(r=>r.name).join(", ");
-            return (
-              <div key={e} style={styles.topRow}>
-                <span style={{fontWeight:"bold"}}>{e}</span>
-                <span>{max>0?`${winners} (${max})`:"-"}</span>
-              </div>
-            );
-          })}
-        </div>
-
-        <h3>Resultados Gerais</h3>
-        {PEOPLE.map(p=>(
-          <div key={p} style={styles.card}>
-            <h4>{p}</h4>
-            {EMOJIS.map(e=>(<span key={e} style={{marginRight:12}}>{e} {yesterdayVotes[p]?.[e]||0}</span>))}
-          </div>
-        ))}
+      <h3>Top por Emoji</h3>
+      <div style={styles.topTable}>
+        {EMOJIS.map(e=>{
+          const ranking = Object.entries(yesterdayVotes).map(([name,obj])=>({name, count: obj?.[e]||0})).sort((a,b)=>b.count-a.count);
+          const max = ranking[0]?.count || 0;
+          const winners = ranking.filter(r=>r.count===max && max>0).map(r=>r.name).join(", ");
+          return (
+            <div key={e} style={styles.topRow}>
+              <span style={{fontWeight:"bold"}}>{e}</span>
+              <span>{max>0?`${winners} (${max})`:"-"}</span>
+            </div>
+          );
+        })}
       </div>
-    );
-  }
+
+      <h3>Resultados Gerais</h3>
+      {PEOPLE.map(p=>(
+        <div key={p} style={styles.card}>
+          <h4>{p}</h4>
+          {EMOJIS.map(e=>(<span key={e} style={{marginRight:12}}>{e} {yesterdayVotes[p]?.[e]||0}</span>))}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // ================= STYLE =================
@@ -342,17 +345,20 @@ const styles = {
   container:{ maxWidth:760, margin:"40px auto", textAlign:"center", fontFamily:"Inter, sans-serif", color:"#fff" },
   title:{ fontSize:36, fontWeight:"bold" },
   date:{ opacity:0.7, marginBottom:10 },
-  card:{ background:"#111", padding:16, marginBottom:12, borderRadius:16, boxShadow:"0 0 20px rgba(0,0,0,0.6)" },
+
+  card:{ background:"rgba(17,17,17,0.9)", padding:16, marginBottom:12, borderRadius:18, boxShadow:"0 10px 30px rgba(0,0,0,0.6)" },
   emojiRow:{ display:"flex", flexWrap:"wrap", gap:10, justifyContent:"center" },
-  emojiBtn:{ fontSize:26, padding:10, borderRadius:12, border:"none", cursor:"pointer", transition:"0.15s" },
+  emojiBtn:{ fontSize:26, padding:10, borderRadius:12, border:"none", cursor:"pointer", transition:"0.15s", backdropFilter:"blur(6px)" },
+
   input:{ padding:12, borderRadius:12, border:"none", margin:8, width:"100%" },
   select:{ padding:12, borderRadius:12, border:"none", margin:8, width:"100%" },
-  mainBtn:{ fontSize:18, padding:"12px 22px", borderRadius:14, border:"none", cursor:"pointer", marginTop:12, background:"linear-gradient(90deg,#22c55e,#16a34a)", color:"#000", fontWeight:"bold" },
-  mainBtnOutline:{ fontSize:16, padding:"10px 18px", borderRadius:14, border:"1px solid #22c55e", background:"transparent", color:"#22c55e", cursor:"pointer", marginTop:12 },
-  linkBtn:{ marginTop:10, background:"none", border:"none", color:"#38bdf8", cursor:"pointer" },
-  backTopBtn:{ marginBottom:10, padding:"6px 14px", borderRadius:10, border:"1px solid #444", background:"transparent", color:"#aaa", cursor:"pointer" },
-  blockedBox:{ background:"#111", padding:16, borderRadius:14, marginBottom:12 },
-  topTable:{ display:"grid", gridTemplateColumns:"1fr 3fr", gap:8, background:"#111", padding:12, borderRadius:14, marginBottom:16 },
+
+  mainBtn:{ fontSize:18, padding:"12px 22px", borderRadius:16, border:"none", cursor:"pointer", marginTop:12, background:"linear-gradient(90deg,#22c55e,#16a34a)", color:"#000", fontWeight:"bold" },
+  mainBtnOutline:{ fontSize:16, padding:"10px 18px", borderRadius:16, border:"1px solid #22c55e", background:"transparent", color:"#22c55e", cursor:"pointer", marginTop:12 },
+
+  backTopBtn:{ padding:"6px 16px", borderRadius:12, border:"1px solid #333", background:"rgba(255,255,255,0.03)", color:"#aaa", cursor:"pointer" },
+
+  blockedBox:{ background:"#111", padding:16, borderRadius:16, marginBottom:12 },
+  topTable:{ display:"grid", gridTemplateColumns:"1fr 3fr", gap:8, background:"#111", padding:12, borderRadius:16, marginBottom:16 },
   topRow:{ display:"contents" }
 };
-
