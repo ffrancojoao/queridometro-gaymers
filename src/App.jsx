@@ -10,6 +10,10 @@ const PEOPLE = [
 const EMOJIS = ["❤️","🤥","🤮","🐍","👜","💔","🍪","🪴","🎯","🍌","💣"];
 const MIN_VOTERS = 5;
 // =========================================
+import React, { useState, useEffect } from "react";
+import { supabase } from "./supabase";
+
+// ================= CONFIG =================
 
 export default function App() {
   const [step, setStep] = useState("home");
@@ -23,7 +27,7 @@ export default function App() {
   const [todayFormatted, setTodayFormatted] = useState("");
   const [yesterdayFormatted, setYesterdayFormatted] = useState("");
 
-  // Datas BR
+  // 🇧🇷 Datas BR
   const todayBR = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
   const yesterdayBR = new Date(Date.now() - 86400000).toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
 
@@ -48,8 +52,8 @@ export default function App() {
       if (!map[v.target][v.emoji]) map[v.target][v.emoji] = 0;
       map[v.target][v.emoji]++;
     });
-    setVotes(map);
 
+    setVotes(map);
     const voters = [...new Set(data.map(d => d.voter))];
     setVoteCount(voters.length);
   }
@@ -77,17 +81,13 @@ export default function App() {
   }
 
   async function verifyVoteToday(name) {
-    const { data } = await supabase.from("votes")
-      .select("id")
-      .eq("voter", name)
-      .eq("day", todayBR)
-      .limit(1);
+    const { data } = await supabase.from("votes").select("id").eq("voter", name).eq("day", todayBR).limit(1);
     return data && data.length > 0;
   }
 
   async function submitVote() {
     if (Object.keys(selected).length !== PEOPLE.length - 1) {
-      return alert("Você precisa votar em TODOS para enviar.");
+      return alert("Você precisa votar em TODOS.");
     }
 
     if (!window.confirm("Tem certeza? Depois de enviar, NÃO poderá editar hoje.")) return;
@@ -122,15 +122,7 @@ export default function App() {
     const percent = Math.min(100, Math.round((value / max) * 100));
     return (
       <div style={{ width:"100%", background:"#222", borderRadius:12, margin:"10px 0" }}>
-        <div style={{
-          width: percent+"%",
-          background:"linear-gradient(90deg,#22c55e,#16a34a)",
-          padding:6,
-          borderRadius:12,
-          textAlign:"center",
-          fontWeight:"bold",
-          color:"#000"
-        }}>
+        <div style={{ width: percent+"%", background:"linear-gradient(90deg,#22c55e,#16a34a)", padding:6, borderRadius:12, textAlign:"center", fontWeight:"bold", color:"#000" }}>
           {percent}%
         </div>
       </div>
@@ -141,7 +133,7 @@ export default function App() {
 
   if (step === "home") return (
     <div style={styles.container}>
-      <h1 style={styles.title}>Queridômetro/Rançômetro dxs Gaymers</h1>
+      <h1 style={styles.title}>Queridômetro da Panela</h1>
       <p style={styles.date}>📅 {todayFormatted}</p>
 
       <button style={styles.mainBtn} onClick={()=>goStep("login")}>Responder</button>
@@ -154,8 +146,6 @@ export default function App() {
 
   if (step === "login") return (
     <div style={styles.container}>
-      <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
-
       <h2>Identificação</h2>
       <p style={styles.date}>📅 {todayFormatted}</p>
 
@@ -164,13 +154,7 @@ export default function App() {
         {PEOPLE.map(p=><option key={p}>{p}</option>)}
       </select>
 
-      <input
-        style={styles.input}
-        type="password"
-        placeholder="Senha"
-        value={password}
-        onChange={e=>setPassword(e.target.value)}
-      />
+      <input style={styles.input} type="password" placeholder="Senha" value={password} onChange={e=>setPassword(e.target.value)} />
 
       <button style={styles.mainBtn} onClick={async ()=>{
         const user = await checkUser(currentUser);
@@ -181,7 +165,12 @@ export default function App() {
         goStep("vote");
       }}>Entrar</button>
 
-      <button style={styles.linkBtn} onClick={()=>goStep("forgot")}>Esqueci minha senha</button>
+      {/* 🔐 ESQUECI SENHA COM MESMA IDENTIDADE */}
+      <button style={styles.mainBtnOutline} onClick={()=>goStep("forgot")}>
+        Esqueci minha senha
+      </button>
+
+      <button style={styles.backBtn} onClick={goBack}>⬅ Voltar</button>
     </div>
   );
 
@@ -189,8 +178,6 @@ export default function App() {
 
   if (step === "register") return (
     <div style={styles.container}>
-      <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
-
       <h2>Criar senha</h2>
       <p>Primeiro acesso de <b>{currentUser}</b></p>
 
@@ -201,6 +188,8 @@ export default function App() {
         await createUser(currentUser, password);
         goStep("vote");
       }}>Salvar e Votar</button>
+
+      <button style={styles.backBtn} onClick={goBack}>⬅ Voltar</button>
     </div>
   );
 
@@ -208,60 +197,11 @@ export default function App() {
 
   if (step === "forgot") return (
     <div style={styles.container}>
-      <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
       <h2>Resetar Senha</h2>
-      <p>Fale com o admin para resetar sua senha.</p>
+      <p>Peça o código ao administrador para resetar sua senha.</p>
+      <button style={styles.backBtn} onClick={goBack}>⬅ Voltar</button>
     </div>
   );
-
-  // ================= VOTE =================
-
-  if (step === "vote") {
-    const progress = Object.keys(selected).length;
-    const total = PEOPLE.length - 1;
-
-    return (
-      <div style={styles.container}>
-        <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
-
-        <h2>Distribua seus emojis</h2>
-        <p style={styles.date}>📅 {todayFormatted}</p>
-        <p>Votando como <b>{currentUser}</b></p>
-
-        <p>Progresso: {progress}/{total}</p>
-        <ProgressBar value={progress} max={total} />
-
-        {PEOPLE.filter(p=>p!==currentUser).map(person=>(
-          <div key={person} style={styles.card}>
-            <h3>{person}</h3>
-            <div style={styles.emojiRow}>
-              {EMOJIS.map(e=>(
-                <button
-                  key={e}
-                  style={{
-                    ...styles.emojiBtn,
-                    background:selected[person]===e?"#22c55e":"#222",
-                    transform:selected[person]===e?"scale(1.15)":"scale(1)"
-                  }}
-                  onClick={()=>setSelected({...selected,[person]:e})}
-                >
-                  {e}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-
-        <button
-          style={{...styles.mainBtn, background: progress===total?"#22c55e":"#555", color:"#000"}}
-          disabled={progress!==total}
-          onClick={submitVote}
-        >
-          Finalizar e Enviar
-        </button>
-      </div>
-    );
-  }
 
   // ================= RESULTS TODAY =================
 
@@ -271,20 +211,16 @@ export default function App() {
 
     return (
       <div style={styles.container}>
-        <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
-
         <h2>Resultados</h2>
         <p style={styles.date}>📅 {todayFormatted}</p>
-        <p>👥 {voteCount} pessoas já votaram</p>
+        <p>👥 {voteCount} pessoas votaram</p>
 
         {blocked && (
           <div style={styles.blockedBox}>
             <h3>🔒 Resultados bloqueados</h3>
-            <p>
-              É necessário <b>{MIN_VOTERS_TO_SHOW}</b> pessoas votarem para liberar os resultados.<br/>
-              Faltam <b>{missing}</b> pessoas.
-            </p>
-            <p style={{opacity:0.7}}>Isso é para preservar o anonimato dos participantes.</p>
+            <p>É necessário <b>{MIN_VOTERS_TO_SHOW}</b> pessoas votarem.</p>
+            <p><b>Faltam {missing}</b> votos para liberar.</p>
+            <p style={{opacity:0.8}}>Isso é para preservar o anonimato.</p>
             <ProgressBar value={voteCount} max={MIN_VOTERS_TO_SHOW} />
           </div>
         )}
@@ -295,6 +231,8 @@ export default function App() {
             {EMOJIS.map(e=>(<span key={e} style={{marginRight:12}}>{e} {votes[p]?.[e]||0}</span>))}
           </div>
         ))}
+
+        <button style={styles.backBtn} onClick={goBack}>⬅ Voltar</button>
       </div>
     );
   }
@@ -304,8 +242,6 @@ export default function App() {
   if (step === "history") {
     return (
       <div style={styles.container}>
-        <button style={styles.backTopBtn} onClick={goBack}>⬅ Voltar</button>
-
         <h2>Resultados (anterior)</h2>
         <p style={styles.date}>📅 {yesterdayFormatted}</p>
 
@@ -317,8 +253,8 @@ export default function App() {
             const winners = ranking.filter(r=>r.count===max && max>0).map(r=>r.name).join(", ");
             return (
               <div key={e} style={styles.topRow}>
-                <span style={{fontWeight:"bold"}}>{e}</span>
-                <span>{max>0?`${winners} (${max})`:"-"}</span>
+                <span>{winners || "-"}</span>
+                <span><b>{e} {max || 0}</b></span>
               </div>
             );
           })}
@@ -331,6 +267,8 @@ export default function App() {
             {EMOJIS.map(e=>(<span key={e} style={{marginRight:12}}>{e} {yesterdayVotes[p]?.[e]||0}</span>))}
           </div>
         ))}
+
+        <button style={styles.backBtn} onClick={goBack}>⬅ Voltar</button>
       </div>
     );
   }
@@ -343,16 +281,13 @@ const styles = {
   title:{ fontSize:36, fontWeight:"bold" },
   date:{ opacity:0.7, marginBottom:10 },
   card:{ background:"#111", padding:16, marginBottom:12, borderRadius:16, boxShadow:"0 0 20px rgba(0,0,0,0.6)" },
-  emojiRow:{ display:"flex", flexWrap:"wrap", gap:10, justifyContent:"center" },
-  emojiBtn:{ fontSize:26, padding:10, borderRadius:12, border:"none", cursor:"pointer", transition:"0.15s" },
   input:{ padding:12, borderRadius:12, border:"none", margin:8, width:"100%" },
   select:{ padding:12, borderRadius:12, border:"none", margin:8, width:"100%" },
   mainBtn:{ fontSize:18, padding:"12px 22px", borderRadius:14, border:"none", cursor:"pointer", marginTop:12, background:"linear-gradient(90deg,#22c55e,#16a34a)", color:"#000", fontWeight:"bold" },
   mainBtnOutline:{ fontSize:16, padding:"10px 18px", borderRadius:14, border:"1px solid #22c55e", background:"transparent", color:"#22c55e", cursor:"pointer", marginTop:12 },
-  linkBtn:{ marginTop:10, background:"none", border:"none", color:"#38bdf8", cursor:"pointer" },
-  backTopBtn:{ marginBottom:10, padding:"6px 14px", borderRadius:10, border:"1px solid #444", background:"transparent", color:"#aaa", cursor:"pointer" },
+  backBtn:{ marginTop:14, padding:"8px 16px", borderRadius:12, border:"1px solid #555", background:"transparent", color:"#aaa", cursor:"pointer" },
   blockedBox:{ background:"#111", padding:16, borderRadius:14, marginBottom:12 },
-  topTable:{ display:"grid", gridTemplateColumns:"1fr 3fr", gap:8, background:"#111", padding:12, borderRadius:14, marginBottom:16 },
+  topTable:{ display:"grid", gridTemplateColumns:"2fr 1fr", gap:8, background:"#111", padding:12, borderRadius:14, marginBottom:16 },
   topRow:{ display:"contents" }
 };
 
